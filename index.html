@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>เกมคณิตคิดเร็ว (by KF) - Offline Mode</title>
+    <title>เกมคณิตคิดเร็ว (Speed Math) - Offline Mode</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -144,6 +144,13 @@
                 [523.25, 392.00, 329.63, 261.63].forEach((freq, i) => { // C5, G4, E4, C4
                     setTimeout(() => playTone(freq, 'triangle', 0.3, 0.1), i * 150);
                 });
+            },
+            ready: () => { // เสียงเตรียมพร้อม (ตึ๊ด...)
+                playTone(400, 'sine', 0.2, 0.1);
+            },
+            go: () => { // เสียงเริ่ม (ตื๊ด!)
+                playTone(600, 'sine', 0.1, 0.1);
+                setTimeout(() => playTone(880, 'square', 0.4, 0.1), 50);
             }
         };
 
@@ -302,6 +309,36 @@
             );
         };
 
+        // --- Countdown Component (New) ---
+        const Countdown = ({ onComplete, playSound }) => {
+            const [step, setStep] = useState('ready'); // ready, go
+
+            useEffect(() => {
+                // Step 1: Ready
+                playSound('ready');
+                
+                const timer1 = setTimeout(() => {
+                    setStep('go');
+                    playSound('go');
+                }, 1500); // แสดง Ready 1.5 วินาที
+
+                const timer2 = setTimeout(() => {
+                    onComplete();
+                }, 2500); // แสดง Go 1 วินาที แล้วเริ่มเกม
+
+                return () => { clearTimeout(timer1); clearTimeout(timer2); };
+            }, []);
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-yellow-50 p-4 fixed inset-0 z-50">
+                    <div className={`text-7xl md:text-9xl font-black transition-all duration-300 transform drop-shadow-lg
+                        ${step === 'ready' ? 'text-orange-500 animate-pulse scale-100' : 'text-green-500 scale-125 animate-bounce'}`}>
+                        {step === 'ready' ? 'READY?' : 'GO!!'}
+                    </div>
+                </div>
+            );
+        };
+
         const Leaderboard = ({ onBack, currentUser, playSound }) => {
             const [scores, setScores] = useState([]);
             const [viewMode, setViewMode] = useState('normal'); 
@@ -441,7 +478,7 @@
                             <i className="fa-solid fa-brain"></i>
                         </div>
                         <h1 className="text-4xl font-extrabold text-gray-800 mb-2">Speed Math</h1>
-                        <p className="text-gray-500 mb-8">ประลองสมอง ประลองความเร็ว (by KF)</p>
+                        <p className="text-gray-500 mb-8">ประลองสมอง ประลองความเร็ว</p>
 
                         {/* Menu State Logic */}
                         {!subMenu ? (
@@ -839,7 +876,11 @@
                 setScore(0);
                 setIsNewHighScore(false);
                 setQuestion(generateQuestion(mode));
-                setGameState('playing_single');
+                setGameState('countdown'); // เปลี่ยนไปหน้า Countdown ก่อน
+            };
+
+            const handleCountdownFinish = () => {
+                setGameState('playing_single'); // เริ่มเกมเมื่อ Countdown จบ
             };
 
             const handleLogout = () => {
@@ -926,6 +967,10 @@
                             currentUser={user}
                             playSound={playSound}
                         />
+                    )}
+
+                    {gameState === 'countdown' && (
+                        <Countdown onComplete={handleCountdownFinish} playSound={playSound} />
                     )}
 
                     {gameState === 'playing_single' && (
