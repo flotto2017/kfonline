@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เกมคณิตคิดเร็ว (by KF) - Offline Mode</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Markdown Parser (Marked) for AI responses -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;800&display=swap');
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #f3f4f6;
+            transition: background-color 0.3s;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+        .anim-pop {
+            animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .shake {
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #c7c7c7;
+            border-radius: 10px;
+        }
+        /* AI Typing Effect */
+        .typing-cursor::after {
+            content: '|';
+            animation: blink 1s step-start infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-presets="react,env">
+        const { useState, useEffect, useRef, useCallback } = React;
+        
+        // --- Gemini API Helper ---
+        const callGeminiAPI = async (prompt) => {
+            const apiKey = ""; // ใส่ API Key ของคุณที่นี่ หากต้องการใช้ AI
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+            
+            if (!apiKey) {
+                return new Promise(resolve => setTimeout(() => resolve("ระบบ AI ต้องการ API Key เพื่อทำงาน (แก้ไขในไฟล์ index.html)"), 1000));
+            }
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }]
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "AI นึกไม่ออกครับ";
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                return "ขออภัย ระบบ AI ขัดข้องชั่วคราว";
+            }
+        };
+
+        // --- Audio Manager (Synthesized Sounds) ---
+        // ใช้ Web Audio API สร้างเสียงเอง ไม่ต้องโหลดไฟล์ ทำให้ทำงาน Offline ได้ 100%
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        const playTone = (freq, type, duration, vol = 0.1) => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        };
+
+        const Sound = {
+            click: () => playTone(600, 'triangle', 0.05, 0.05),
+            correct: () => {
+                playTone(600, 'sine', 0.1, 0.1);
+                setTimeout(() => playTone(1200, 'sine', 0.2, 0.1), 100); // High pitch ding
+            },
+            wrong: () => {
+                playTone(150, 'sawtooth', 0.3, 0.1);
+                setTimeout(() => playTone(100, 'sawtooth', 0.3, 0.1), 100); // Low pitch buzz
+            },
+            gameOver: () => {
+                const now = audioCtx.currentTime;
+                [523.25, 392.00, 329.63, 261.63].forEach((freq, i) => { // C5, G4, E4, C4
+                    setTimeout(() => playTone(freq, 'triangle', 0.3, 0.1), i * 150);
+                });
+            }
+        };
+
+        // --- Helper Functions ---
+        const generateQuestion = (mode = 'normal') => {
+            if (mode === 'baby') {
+                const ops = ['+', '-'];
+                let op, a, b, answer;
+                do {
+                    op = ops[Math.floor(Math.random() * ops.length)];
+                    a = Math.floor(Math.random() * 10);
+                    b = Math.floor(Math.random() * 10);
+                    if (op === '+') answer = a + b;
+                    else {
+                        if (a < b) [a, b] = [b, a]; 
+                        answer = a - b;
+                    }
+                } while (answer >= 10);
+                return { a, b, op, answer, id: Date.now() };
+            }
+
+            // God Multiplication Modes
+            if (mode === 'god_2x1') {
+                const a = Math.floor(Math.random() * 90) + 10;
+                const b = Math.floor(Math.random() * 8) + 2;
+                return { a, b, op: '*', answer: a * b, id: Date.now() };
+            }
+            if (mode === 'god_3x1') {
+                const a = Math.floor(Math.random() * 900) + 100;
+                const b = Math.floor(Math.random() * 8) + 2;
+                return { a, b, op: '*', answer: a * b, id: Date.now() };
+            }
+            if (mode === 'god_2x2') {
+                const a = Math.floor(Math.random() * 90) + 10;
+                const b = Math.floor(Math.random() * 90) + 10;
+                return { a, b, op: '*', answer: a * b, id: Date.now() };
+            }
+
+            // God Division Modes (หารลงตัว)
+            if (mode === 'god_div_3x1') {
+                const b = Math.floor(Math.random() * 8) + 2;
+                const minAns = Math.ceil(100 / b);
+                const maxAns = Math.floor(999 / b);
+                const ans = Math.floor(Math.random() * (maxAns - minAns + 1)) + minAns;
+                const a = ans * b;
+                return { a, b, op: '/', answer: ans, id: Date.now() };
+            }
+            if (mode === 'god_div_4x1') {
+                const b = Math.floor(Math.random() * 8) + 2;
+                const minAns = Math.ceil(1000 / b);
+                const maxAns = Math.floor(9999 / b);
+                const ans = Math.floor(Math.random() * (maxAns - minAns + 1)) + minAns;
+                const a = ans * b;
+                return { a, b, op: '/', answer: ans, id: Date.now() };
+            }
+            if (mode === 'god_div_4x2') {
+                const b = Math.floor(Math.random() * 90) + 10;
+                const minAns = Math.ceil(1000 / b);
+                const maxAns = Math.floor(9999 / b);
+                const ans = Math.floor(Math.random() * (maxAns - minAns + 1)) + minAns;
+                const a = ans * b;
+                return { a, b, op: '/', answer: ans, id: Date.now() };
+            }
+
+            // Normal Mode
+            const ops = ['+', '-', '*'];
+            const op = ops[Math.floor(Math.random() * ops.length)];
+            let a, b;
+            if (op === '*') {
+                a = Math.floor(Math.random() * 12) + 2;
+                b = Math.floor(Math.random() * 9) + 2;
+            } else {
+                a = Math.floor(Math.random() * 50) + 1;
+                b = Math.floor(Math.random() * 50) + 1;
+            }
+            if (op === '-' && a < b) [a, b] = [b, a];
+            const answer = eval(`${a} ${op} ${b}`);
+            return { a, b, op, answer, id: Date.now() };
+        };
+
+        const Timer = ({ duration, onTimeUp, active }) => {
+            const [timeLeft, setTimeLeft] = useState(duration);
+
+            useEffect(() => {
+                if (!active) return;
+                if (timeLeft <= 0) {
+                    onTimeUp();
+                    return;
+                }
+                const timer = setInterval(() => {
+                    setTimeLeft(prev => prev - 1);
+                }, 1000);
+                return () => clearInterval(timer);
+            }, [timeLeft, active]);
+
+            return (
+                <div className={`text-2xl font-bold ${timeLeft < 10 ? 'text-red-500' : 'text-blue-600'}`}>
+                    <i className="fa-regular fa-clock mr-2"></i> {timeLeft}s
+                </div>
+            );
+        };
+
+        // --- Components ---
+
+        // Toggle Sound Button Component
+        const SoundToggle = ({ muted, onToggle }) => (
+            <button 
+                onClick={onToggle}
+                className="absolute top-4 right-4 z-50 bg-white p-3 rounded-full shadow-md text-gray-600 hover:text-blue-500 transition hover:scale-110"
+            >
+                {muted ? <i className="fa-solid fa-volume-xmark"></i> : <i className="fa-solid fa-volume-high"></i>}
+            </button>
+        );
+
+        const LoginScreen = ({ onLogin, playSound }) => {
+            const [username, setUsername] = useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (username.trim()) {
+                    playSound('click');
+                    onLogin({ displayName: username.trim() });
+                }
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
+                    <div className="glass-panel p-8 rounded-3xl w-full max-w-sm">
+                        <div className="text-center mb-6">
+                            <div className="text-5xl text-blue-500 mb-2"><i className="fa-solid fa-gamepad"></i></div>
+                            <h2 className="text-2xl font-bold text-gray-800">เริ่มเกมเลย!</h2>
+                            <p className="text-xs text-gray-400 mt-1">ไม่ต้องสมัครสมาชิก (Offline Mode)</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-700 text-sm font-bold mb-2">ชื่อของคุณ</label>
+                                <input 
+                                    type="text" 
+                                    value={username} 
+                                    onChange={(e) => setUsername(e.target.value)}
+                                    className="w-full p-3 rounded-xl border border-gray-300 focus:border-blue-500 outline-none transition"
+                                    placeholder="ตั้งชื่อเล่น..."
+                                    required
+                                />
+                            </div>
+                            <button 
+                                type="submit" 
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transform transition hover:scale-105"
+                            >
+                                เข้าเล่นเกม
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const Leaderboard = ({ onBack, currentUser, playSound }) => {
+            const [scores, setScores] = useState([]);
+            const [viewMode, setViewMode] = useState('normal'); 
+
+            useEffect(() => {
+                // Determine storage key
+                let storageKey = 'speedmath_scores';
+                if (viewMode === 'baby') storageKey = 'speedmath_scores_baby';
+                else if (viewMode === 'god_2x1') storageKey = 'speedmath_scores_god_2x1';
+                else if (viewMode === 'god_3x1') storageKey = 'speedmath_scores_god_3x1';
+                else if (viewMode === 'god_2x2') storageKey = 'speedmath_scores_god_2x2';
+                else if (viewMode === 'god_div_3x1') storageKey = 'speedmath_scores_god_div_3x1';
+                else if (viewMode === 'god_div_4x1') storageKey = 'speedmath_scores_god_div_4x1';
+                else if (viewMode === 'god_div_4x2') storageKey = 'speedmath_scores_god_div_4x2';
+                
+                const storedScores = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                storedScores.sort((a, b) => b.score - a.score);
+                setScores(storedScores.slice(0, 20));
+            }, [viewMode]);
+
+            const getModeLabel = (m) => {
+                 if (m === 'normal') return 'ปกติ';
+                 if (m === 'baby') return 'Baby';
+                 if (m === 'god_2x1') return 'เทพคูณ 2x1';
+                 if (m === 'god_3x1') return 'เทพคูณ 3x1';
+                 if (m === 'god_2x2') return 'เทพคูณ 2x2';
+                 if (m === 'god_div_3x1') return 'เทพหาร 3/1';
+                 if (m === 'god_div_4x1') return 'เทพหาร 4/1';
+                 if (m === 'god_div_4x2') return 'เทพหาร 4/2';
+                 return m;
+            };
+
+            const handleModeChange = (m) => {
+                playSound('click');
+                setViewMode(m);
+            };
+
+            const isCurrentModeActive = (m) => viewMode === m;
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
+                    <div className="glass-panel p-6 rounded-3xl w-full max-w-md relative h-[85vh] flex flex-col">
+                        <button onClick={() => { playSound('click'); onBack(); }} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 z-10">
+                            <i className="fa-solid fa-arrow-left fa-xl"></i>
+                        </button>
+                        <h2 className="text-3xl font-bold text-center text-yellow-500 mb-2 mt-2">
+                            <i className="fa-solid fa-trophy mr-2"></i>อันดับยอดเยี่ยม
+                        </h2>
+
+                        {/* Mode Toggles - Scrollable for more modes */}
+                        <div className="flex gap-2 mb-4 mt-2 overflow-x-auto pb-2 px-2 custom-scroll">
+                            {['normal', 'baby'].map(m => (
+                                <button key={m} onClick={() => handleModeChange(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${isCurrentModeActive(m) ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>
+                            ))}
+                            {['god_2x1', 'god_3x1', 'god_2x2'].map(m => (
+                                <button key={m} onClick={() => handleModeChange(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${isCurrentModeActive(m) ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>
+                            ))}
+                            {['god_div_3x1', 'god_div_4x1', 'god_div_4x2'].map(m => (
+                                <button key={m} onClick={() => handleModeChange(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${isCurrentModeActive(m) ? 'bg-teal-500 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>
+                            ))}
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto custom-scroll mt-2 pr-2">
+                            {scores.length === 0 ? (
+                                <div className="text-center text-gray-400 mt-10">
+                                    ยังไม่มีคะแนนในโหมด {getModeLabel(viewMode)}
+                                </div>
+                            ) : (
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="text-gray-400 text-sm border-b border-gray-200">
+                                            <th className="py-2 px-2 font-light">#</th>
+                                            <th className="py-2 px-2 font-light">ผู้เล่น</th>
+                                            <th className="py-2 px-2 font-light text-right">คะแนน</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {scores.map((s, index) => {
+                                            const isMe = currentUser && s.username === currentUser.displayName;
+                                            return (
+                                                <tr key={index} className={`border-b border-gray-100 last:border-0 ${isMe ? 'bg-yellow-50' : ''}`}>
+                                                    <td className="py-3 px-2 font-bold text-gray-500">
+                                                        {index + 1 === 1 ? '🥇' : index + 1 === 2 ? '🥈' : index + 1 === 3 ? '🥉' : index + 1}
+                                                    </td>
+                                                    <td className={`py-3 px-2 font-semibold ${isMe ? 'text-blue-600' : 'text-gray-700'}`}>
+                                                        {s.username} {isMe && '(คุณ)'}
+                                                    </td>
+                                                    <td className="py-3 px-2 text-right font-bold text-blue-500">
+                                                        {s.score}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MainMenu = ({ onStartSingle, onShowLeaderboard, onLogout, username, playSound }) => {
+            const [aiFact, setAiFact] = useState(null);
+            const [loadingAi, setLoadingAi] = useState(false);
+            const [subMenu, setSubMenu] = useState(null);
+
+            const getMathFact = async () => {
+                playSound('click');
+                setLoadingAi(true);
+                setAiFact(null);
+                const prompt = "บอกเกร็ดความรู้สั้นๆ เกี่ยวกับคณิตศาสตร์ที่น่าทึ่ง 1 อย่าง ความยาวไม่เกิน 2 บรรทัด เป็นภาษาไทย น้ำเสียงตื่นเต้น";
+                const fact = await callGeminiAPI(prompt);
+                setAiFact(fact);
+                setLoadingAi(false);
+            };
+
+            const handleSubMenu = (menu) => {
+                playSound('click');
+                setSubMenu(menu);
+            }
+
+            const handleStart = (mode) => {
+                playSound('click');
+                onStartSingle(mode);
+            }
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
+                    <div className="glass-panel p-8 rounded-3xl text-center max-w-md w-full border-b-4 border-blue-200 relative">
+                        <div className="absolute top-4 right-4 flex flex-col items-end">
+                             <span className="text-xs text-gray-400">ผู้เล่น:</span>
+                             <span className="text-sm font-bold text-blue-600">{username}</span>
+                        </div>
+
+                        <div className="text-6xl mb-4 text-yellow-400 drop-shadow-md mt-6 hover:scale-110 transition cursor-pointer" onClick={() => playSound('correct')}>
+                            <i className="fa-solid fa-brain"></i>
+                        </div>
+                        <h1 className="text-4xl font-extrabold text-gray-800 mb-2">Speed Math</h1>
+                        <p className="text-gray-500 mb-8">ประลองสมอง ประลองความเร็ว (by KF)</p>
+
+                        {/* Menu State Logic */}
+                        {!subMenu ? (
+                            <>
+                                <button 
+                                    onClick={() => handleStart('normal')}
+                                    className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 mb-3 text-xl"
+                                >
+                                    <i className="fa-solid fa-bolt mr-2"></i> เริ่มเกม (ปกติ)
+                                </button>
+
+                                <button 
+                                    onClick={() => handleStart('baby')}
+                                    className="w-full bg-pink-400 hover:bg-pink-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 mb-3 text-xl"
+                                >
+                                    <i className="fa-solid fa-baby mr-2"></i> Baby Mode 👶
+                                </button>
+
+                                <button 
+                                    onClick={() => handleSubMenu('god_mult')}
+                                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 mb-3 text-xl border-b-4 border-yellow-700"
+                                >
+                                    <i className="fa-solid fa-crown mr-2"></i> เทพการคูณ ⚡
+                                </button>
+
+                                <button 
+                                    onClick={() => handleSubMenu('god_div')}
+                                    className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 mb-3 text-xl border-b-4 border-teal-700"
+                                >
+                                    <i className="fa-solid fa-divide mr-2"></i> เทพการหาร ➗
+                                </button>
+
+                                <button 
+                                    onClick={() => { playSound('click'); onShowLeaderboard(); }}
+                                    className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-2xl shadow transform transition hover:scale-105 mb-3 text-lg"
+                                >
+                                    <i className="fa-solid fa-trophy mr-2"></i> อันดับ (ในเครื่อง)
+                                </button>
+                            </>
+                        ) : subMenu === 'god_mult' ? (
+                            // God Multiplication Sub-menu
+                            <div className="space-y-3 mb-4 animate-[pop_0.3s_ease-out]">
+                                <h3 className="text-yellow-600 font-bold text-lg mb-2">เลือกความเทพ (คูณ)</h3>
+                                <button 
+                                    onClick={() => handleStart('god_2x1')}
+                                    className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 px-6 rounded-xl shadow-md"
+                                >
+                                    2 หลัก × 1 หลัก
+                                </button>
+                                <button 
+                                    onClick={() => handleStart('god_3x1')}
+                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-md"
+                                >
+                                    3 หลัก × 1 หลัก
+                                </button>
+                                <button 
+                                    onClick={() => handleStart('god_2x2')}
+                                    className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-red-800"
+                                >
+                                    2 หลัก × 2 หลัก 🔥
+                                </button>
+                                <button 
+                                    onClick={() => handleSubMenu(null)}
+                                    className="text-gray-400 hover:text-gray-600 text-sm mt-2"
+                                >
+                                    <i className="fa-solid fa-arrow-left"></i> กลับ
+                                </button>
+                            </div>
+                        ) : (
+                            // God Division Sub-menu
+                            <div className="space-y-3 mb-4 animate-[pop_0.3s_ease-out]">
+                                <h3 className="text-teal-600 font-bold text-lg mb-2">เลือกความเทพ (หาร)</h3>
+                                <button 
+                                    onClick={() => handleStart('god_div_3x1')}
+                                    className="w-full bg-teal-400 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl shadow-md"
+                                >
+                                    3 หลัก ÷ 1 หลัก
+                                </button>
+                                <button 
+                                    onClick={() => handleStart('god_div_4x1')}
+                                    className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-xl shadow-md"
+                                >
+                                    4 หลัก ÷ 1 หลัก
+                                </button>
+                                <button 
+                                    onClick={() => handleStart('god_div_4x2')}
+                                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-cyan-800"
+                                >
+                                    4 หลัก ÷ 2 หลัก 🔥
+                                </button>
+                                <button 
+                                    onClick={() => handleSubMenu(null)}
+                                    className="text-gray-400 hover:text-gray-600 text-sm mt-2"
+                                >
+                                    <i className="fa-solid fa-arrow-left"></i> กลับ
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Gemini Feature 1 */}
+                        <div className="mt-4 mb-4">
+                             <button 
+                                onClick={getMathFact}
+                                disabled={loadingAi}
+                                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transform transition hover:scale-105 flex items-center justify-center gap-2"
+                            >
+                                {loadingAi ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-sparkles"></i>}
+                                <span>ขอเกร็ดความรู้ AI</span>
+                            </button>
+                            {aiFact && (
+                                <div className="mt-3 bg-indigo-50 p-3 rounded-lg text-sm text-indigo-800 border border-indigo-200 animate-pulse-slow">
+                                    <strong className="block mb-1">✨ Gemini บอกว่า:</strong>
+                                    {aiFact}
+                                </div>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={() => { playSound('click'); onLogout(); }}
+                            className="text-gray-400 hover:text-red-500 text-sm underline"
+                        >
+                            เปลี่ยนชื่อผู้เล่น
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const GameScreen = ({ question, score, onAnswer, onQuit, timeUp, mode, playSound }) => {
+            const [input, setInput] = useState('');
+            const [feedback, setFeedback] = useState(null); 
+            
+            const inputRef = useRef(null);
+            useEffect(() => { inputRef.current?.focus(); }, [question]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const val = parseInt(input);
+                if (isNaN(val)) return;
+
+                if (val === question.answer) {
+                    playSound('correct');
+                    setFeedback('correct');
+                    onAnswer(true);
+                } else {
+                    playSound('wrong');
+                    setFeedback('wrong');
+                    onAnswer(false);
+                }
+                setInput('');
+                setTimeout(() => setFeedback(null), 500);
+            };
+
+            const handleNumpad = (num) => {
+                playSound('click');
+                if (num === 'C') setInput('');
+                else setInput(prev => prev + num);
+                inputRef.current?.focus();
+            };
+
+            const isGodMult = mode.startsWith('god') && !mode.includes('div');
+            const isGodDiv = mode.startsWith('god_div');
+            const isBabyMode = mode === 'baby';
+
+            let modeLabel = '';
+            if (isBabyMode) modeLabel = 'BABY MODE';
+            if (mode === 'god_2x1') modeLabel = 'GOD MUL 2x1';
+            if (mode === 'god_3x1') modeLabel = 'GOD MUL 3x1';
+            if (mode === 'god_2x2') modeLabel = 'GOD MUL 2x2';
+            if (mode === 'god_div_3x1') modeLabel = 'GOD DIV 3/1';
+            if (mode === 'god_div_4x1') modeLabel = 'GOD DIV 4/1';
+            if (mode === 'god_div_4x2') modeLabel = 'GOD DIV 4/2';
+
+            const getThemeColors = () => {
+                if (isBabyMode) return { bg: 'bg-pink-50', text: 'text-pink-500', border: 'border-pink-400', ring: 'focus:border-pink-400', score: 'text-pink-500', btn: 'bg-pink-400' };
+                if (isGodMult) return { bg: 'bg-orange-50', text: 'text-orange-500', border: 'border-orange-500', ring: 'focus:border-orange-500', score: 'text-orange-600', btn: 'bg-orange-500' };
+                if (isGodDiv) return { bg: 'bg-teal-50', text: 'text-teal-500', border: 'border-teal-500', ring: 'focus:border-teal-500', score: 'text-teal-600', btn: 'bg-teal-500' };
+                return { bg: 'bg-blue-50', text: 'text-blue-500', border: 'border-blue-500', ring: 'focus:border-blue-500', score: 'text-blue-600', btn: 'bg-blue-500' };
+            };
+            
+            const theme = getThemeColors();
+
+            return (
+                <div className={`flex flex-col items-center min-h-screen pt-8 pb-4 px-4 transition-colors duration-500 ${theme.bg} ${feedback === 'correct' ? 'bg-green-100' : feedback === 'wrong' ? 'bg-red-100' : ''}`}>
+                    <div className="w-full max-w-lg flex justify-between items-center mb-8">
+                        <button onClick={() => { playSound('click'); onQuit(); }} className="w-10 h-10 rounded-full bg-white shadow text-gray-500 hover:text-red-500">
+                            <i className="fa-solid fa-times"></i>
+                        </button>
+                        <div className="bg-white px-6 py-2 rounded-full shadow-sm flex items-center gap-2">
+                             {modeLabel && <span className={`text-sm font-bold ${theme.text}`}>{modeLabel}</span>}
+                            <Timer duration={60} onTimeUp={timeUp} active={true} />
+                        </div>
+                        <div className="w-10"></div> 
+                    </div>
+
+                    <div className="w-full max-w-lg flex justify-center mb-8">
+                        <div className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 flex flex-col items-center w-32 ${theme.border} ${feedback === 'correct' ? 'scale-110 transition-transform' : ''}`}>
+                            <span className="text-gray-400 text-xs uppercase font-bold">คะแนน</span>
+                            <span className={`text-4xl font-bold ${theme.score}`}>{score}</span>
+                        </div>
+                    </div>
+
+                    <div className={`w-full max-w-lg glass-panel p-8 rounded-3xl text-center mb-6 shadow-xl relative overflow-hidden transition-transform ${feedback === 'wrong' ? 'shake bg-red-50' : ''}`}>
+                        {feedback === 'correct' && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-green-100 bg-opacity-90 z-10 text-green-600 text-6xl font-bold anim-pop">
+                                <i className="fa-solid fa-check"></i>
+                            </div>
+                        )}
+                        
+                        <div className="text-gray-400 text-sm mb-2">โจทย์ข้อที่ {score + 1}</div>
+                        <div className="text-6xl font-bold text-gray-800 mb-8 flex justify-center gap-4">
+                            <span>{question.a}</span>
+                            <span className={theme.text}>{question.op === '*' ? '×' : question.op === '/' ? '÷' : question.op}</span>
+                            <span>{question.b}</span>
+                            <span className="text-gray-300">=</span>
+                            <span className={theme.score}>?</span>
+                        </div>
+
+                        <form onSubmit={handleSubmit}>
+                            <input
+                                ref={inputRef}
+                                type="number"
+                                pattern="[0-9]*"
+                                inputMode="numeric"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent focus:bg-white outline-none transition shadow-inner ${theme.ring}`}
+                                placeholder="คำตอบ"
+                            />
+                            <button type="submit" className="hidden">Submit</button>
+                        </form>
+                    </div>
+
+                    <div className="w-full max-w-lg grid grid-cols-3 gap-2 mt-auto">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((num) => (
+                            <button
+                                key={num}
+                                onClick={() => handleNumpad(num)}
+                                className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition ${num === 'C' ? 'bg-red-100 text-red-500' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                         <button
+                            onClick={handleSubmit}
+                            className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition text-white ${theme.btn}`}
+                        >
+                            <i className="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const GameOver = ({ score, onRestart, resultMessage, isNewHighScore, mode, playSound }) => {
+            const [aiAnalysis, setAiAnalysis] = useState('');
+            const [loadingAi, setLoadingAi] = useState(false);
+
+            useEffect(() => {
+                playSound('gameOver');
+            }, []);
+
+            const analyzePerformance = async () => {
+                playSound('click');
+                setLoadingAi(true);
+                setAiAnalysis('');
+                
+                let modeName = 'ปกติ';
+                if (mode === 'baby') modeName = 'เด็กเล็ก';
+                if (mode.startsWith('god') && !mode.includes('div')) modeName = 'เทพการคูณ';
+                if (mode.startsWith('god_div')) modeName = 'เทพการหาร';
+
+                let context = `ผู้เล่นเล่นเกมคณิตคิดเร็ว (โหมด${modeName}) ในเวลา 60 วินาที ได้คะแนน ${score} ข้อ. `;
+                
+                if (mode === 'baby') context += "โจทย์ง่ายมาก คำตอบไม่เกิน 10. ";
+                if (mode.startsWith('god')) context += "โจทย์เลขยากมาก! ";
+                
+                if (score < 5) context += "ถือว่ายังน้อย ต้องฝึกฝนเพิ่ม.";
+                else if (score < 20) context += "ถือว่าเก่งใช้ได้.";
+                else context += "ถือว่ายอดเยี่ยมมาก!";
+
+                const prompt = `${context} ช่วยพูดวิจารณ์ผลงาน ให้คำแนะนำ หรือให้กำลังใจสั้นๆ (ไม่เกิน 2 ประโยค) แบบสนุกสนาน เป็นกันเอง และใส่อารมณ์ขัน ใช้ภาษาไทย`;
+                
+                const response = await callGeminiAPI(prompt);
+                setAiAnalysis(response);
+                setLoadingAi(false);
+            };
+
+            const isGodMult = mode.startsWith('god') && !mode.includes('div');
+            const isGodDiv = mode.startsWith('god_div');
+            const isBabyMode = mode === 'baby';
+
+            const getThemeColors = () => {
+                if (isBabyMode) return { text: 'text-pink-400', score: 'text-pink-500', btn: 'from-pink-400 to-rose-400', mainBtn: 'bg-pink-400 hover:bg-pink-500' };
+                if (isGodMult) return { text: 'text-orange-500', score: 'text-orange-600', btn: 'from-yellow-400 to-orange-500', mainBtn: 'bg-orange-500 hover:bg-orange-600' };
+                if (isGodDiv) return { text: 'text-teal-500', score: 'text-teal-600', btn: 'from-teal-400 to-cyan-500', mainBtn: 'bg-teal-500 hover:bg-teal-600' };
+                return { text: 'text-purple-500', score: 'text-blue-600', btn: 'from-pink-500 to-rose-500', mainBtn: 'bg-blue-500 hover:bg-blue-600' };
+            };
+            const theme = getThemeColors();
+
+            return (
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
+                    <div className="glass-panel p-8 rounded-3xl text-center max-w-md w-full">
+                        <div className={`text-6xl mb-4 ${theme.text}`}>
+                            <i className="fa-solid fa-flag-checkered"></i>
+                        </div>
+                        <h2 className="text-3xl font-bold text-gray-800 mb-2">จบเกม!</h2>
+                        
+                        {isBabyMode && <div className="text-pink-400 font-bold mb-2">Baby Mode</div>}
+                        {isGodMult && <div className="text-orange-500 font-bold mb-2 text-xl">GOD MULT {mode.replace('god_', '')}</div>}
+                        {isGodDiv && <div className="text-teal-500 font-bold mb-2 text-xl">GOD DIV {mode.replace('god_div_', '')}</div>}
+                        
+                        <div className="text-xl text-gray-600 mb-4">{resultMessage || "หมดเวลาแล้ว"}</div>
+                        
+                        {isNewHighScore && (
+                            <div className="mb-4 text-yellow-500 font-bold animate-bounce">
+                                <i className="fa-solid fa-star mr-1"></i> สถิติใหม่บนเครื่องนี้!
+                            </div>
+                        )}
+
+                        <div className="bg-gray-100 p-6 rounded-2xl mb-6">
+                            <div className="text-gray-500 text-sm uppercase font-bold">คะแนนของคุณ</div>
+                            <div className={`text-6xl font-extrabold ${theme.score}`}>{score}</div>
+                        </div>
+
+                        {/* Gemini Feature 2 */}
+                        <div className="mb-6">
+                             {!aiAnalysis && !loadingAi && (
+                                <button 
+                                    onClick={analyzePerformance}
+                                    className={`text-sm bg-gradient-to-r text-white py-2 px-4 rounded-full shadow hover:scale-105 transition flex items-center justify-center gap-2 mx-auto ${theme.btn}`}
+                                >
+                                    <i className="fa-solid fa-wand-magic-sparkles"></i> ให้ AI วิเคราะห์ผลงาน
+                                </button>
+                             )}
+
+                             {loadingAi && (
+                                 <div className="text-gray-500 text-sm animate-pulse">
+                                    <i className="fa-solid fa-robot mr-2"></i> AI กำลังคิดคำคม...
+                                 </div>
+                             )}
+
+                             {aiAnalysis && (
+                                <div className="bg-white p-4 rounded-xl border-l-4 border-pink-500 text-left shadow-sm">
+                                    <div className="text-xs text-pink-500 font-bold mb-1">COACH GEMINI SAYS:</div>
+                                    <div className="text-gray-700 text-sm typing-cursor" dangerouslySetInnerHTML={{__html: marked.parse(aiAnalysis)}}></div>
+                                </div>
+                             )}
+                        </div>
+
+                        <button 
+                            onClick={() => { playSound('click'); onRestart(); }}
+                            className={`w-full text-white font-bold py-4 px-6 rounded-2xl shadow-lg transform transition hover:scale-105 ${theme.mainBtn}`}
+                        >
+                            เล่นอีกครั้ง
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App ---
+
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [gameState, setGameState] = useState('login'); 
+            const [score, setScore] = useState(0);
+            const [question, setQuestion] = useState(generateQuestion('normal')); 
+            const [gameResultMsg, setGameResultMsg] = useState('');
+            const [isNewHighScore, setIsNewHighScore] = useState(false);
+            const [difficulty, setDifficulty] = useState('normal'); 
+            const [isMuted, setIsMuted] = useState(false);
+
+            useEffect(() => {
+                const savedUser = sessionStorage.getItem('speedmath_user');
+                if (savedUser) {
+                    setUser(JSON.parse(savedUser));
+                    setGameState('menu');
+                }
+            }, []);
+
+            const playSound = (type) => {
+                if (isMuted) return;
+                if (Sound[type]) Sound[type]();
+            };
+
+            const handleLogin = (userInfo) => {
+                setUser(userInfo);
+                sessionStorage.setItem('speedmath_user', JSON.stringify(userInfo));
+                setGameState('menu');
+            };
+
+            const startGameSingle = (mode = 'normal') => {
+                setDifficulty(mode);
+                setScore(0);
+                setIsNewHighScore(false);
+                setQuestion(generateQuestion(mode));
+                setGameState('playing_single');
+            };
+
+            const handleLogout = () => {
+                setUser(null);
+                sessionStorage.removeItem('speedmath_user');
+                setGameState('login');
+            };
+
+            const updateAnswer = (isCorrect) => {
+                if (isCorrect) {
+                    const newScore = score + 1;
+                    setScore(newScore);
+                    setQuestion(generateQuestion(difficulty)); 
+                }
+            };
+
+            const saveHighScoreLocal = (finalScore) => {
+                if (!user) return;
+                
+                try {
+                    let storageKey = 'speedmath_scores';
+                    if (difficulty === 'baby') storageKey = 'speedmath_scores_baby';
+                    else if (difficulty === 'god_2x1') storageKey = 'speedmath_scores_god_2x1';
+                    else if (difficulty === 'god_3x1') storageKey = 'speedmath_scores_god_3x1';
+                    else if (difficulty === 'god_2x2') storageKey = 'speedmath_scores_god_2x2';
+                    else if (difficulty === 'god_div_3x1') storageKey = 'speedmath_scores_god_div_3x1';
+                    else if (difficulty === 'god_div_4x1') storageKey = 'speedmath_scores_god_div_4x1';
+                    else if (difficulty === 'god_div_4x2') storageKey = 'speedmath_scores_god_div_4x2';
+                    
+                    const storedScores = JSON.parse(localStorage.getItem(storageKey) || '[]');
+                    
+                    const newEntry = {
+                        username: user.displayName,
+                        score: finalScore,
+                        timestamp: Date.now()
+                    };
+                    
+                    const myOldHigh = storedScores.find(s => s.username === user.displayName)?.score || 0;
+                    if (finalScore > myOldHigh) {
+                        setIsNewHighScore(true);
+                    }
+
+                    storedScores.push(newEntry);
+                    
+                    localStorage.setItem(storageKey, JSON.stringify(storedScores));
+                } catch (e) {
+                    console.error("Error saving local score:", e);
+                }
+            };
+
+            const handleGameOver = () => {
+                saveHighScoreLocal(score);
+                setGameResultMsg("หมดเวลาแล้ว!");
+                setGameState('game_over');
+            };
+
+            const resetGame = () => {
+                setGameState('menu');
+                setScore(0);
+                setIsNewHighScore(false);
+            };
+
+            return (
+                <div className="min-h-screen relative">
+                    <SoundToggle muted={isMuted} onToggle={() => setIsMuted(!isMuted)} />
+                    
+                    {gameState === 'login' && (
+                        <LoginScreen onLogin={handleLogin} playSound={playSound} />
+                    )}
+
+                    {gameState === 'menu' && (
+                        <MainMenu 
+                            onStartSingle={startGameSingle} 
+                            onShowLeaderboard={() => setGameState('leaderboard')}
+                            onLogout={handleLogout}
+                            username={user?.displayName}
+                            playSound={playSound}
+                        />
+                    )}
+
+                    {gameState === 'leaderboard' && (
+                        <Leaderboard 
+                            onBack={() => setGameState('menu')}
+                            currentUser={user}
+                            playSound={playSound}
+                        />
+                    )}
+
+                    {gameState === 'playing_single' && (
+                        <GameScreen 
+                            question={question}
+                            score={score}
+                            onAnswer={updateAnswer}
+                            onQuit={resetGame}
+                            timeUp={handleGameOver}
+                            mode={difficulty}
+                            playSound={playSound}
+                        />
+                    )}
+
+                    {gameState === 'game_over' && (
+                        <GameOver 
+                            score={score} 
+                            resultMessage={gameResultMsg}
+                            onRestart={resetGame}
+                            isNewHighScore={isNewHighScore}
+                            mode={difficulty}
+                            playSound={playSound}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
