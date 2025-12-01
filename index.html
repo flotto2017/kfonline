@@ -73,6 +73,15 @@
             animation: blink 1s step-start infinite;
         }
         @keyframes blink { 50% { opacity: 0; } }
+
+        /* Slow Blink for Credit */
+        .blink-slow {
+            animation: blink-slow 3s infinite ease-in-out;
+        }
+        @keyframes blink-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
     </style>
 </head>
 <body>
@@ -277,7 +286,7 @@
             };
 
             return (
-                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop relative">
                     <div className="glass-panel p-8 rounded-3xl w-full max-w-sm">
                         <div className="text-center mb-6">
                             <div className="text-5xl text-blue-500 mb-2"><i className="fa-solid fa-gamepad"></i></div>
@@ -304,6 +313,10 @@
                                 เข้าเล่นเกม
                             </button>
                         </form>
+                    </div>
+                    {/* Credit KF */}
+                    <div className="absolute bottom-4 right-4 text-xs text-gray-400 blink-slow font-light">
+                        สร้างโดย KF
                     </div>
                 </div>
             );
