@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>เกมคณิตคิดเร็ว (Speed Math) - Offline Mode</title>
     
     <!-- React & ReactDOM -->
@@ -27,6 +27,11 @@
             font-family: 'Prompt', sans-serif;
             background-color: #f3f4f6;
             transition: background-color 0.3s;
+            /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior-y: contain; 
+            /* Prevent text selection */
+            user-select: none;
+            -webkit-user-select: none;
         }
         .glass-panel {
             background: rgba(255, 255, 255, 0.95);
@@ -121,7 +126,6 @@
         };
 
         // --- Audio Manager (Synthesized Sounds) ---
-        // ใช้ Web Audio API สร้างเสียงเอง ไม่ต้องโหลดไฟล์ ทำให้ทำงาน Offline ได้ 100%
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
         const playTone = (freq, type, duration, vol = 0.1) => {
@@ -142,22 +146,22 @@
             click: () => playTone(600, 'triangle', 0.05, 0.05),
             correct: () => {
                 playTone(600, 'sine', 0.1, 0.1);
-                setTimeout(() => playTone(1200, 'sine', 0.2, 0.1), 100); // High pitch ding
+                setTimeout(() => playTone(1200, 'sine', 0.2, 0.1), 100); 
             },
             wrong: () => {
                 playTone(150, 'sawtooth', 0.3, 0.1);
-                setTimeout(() => playTone(100, 'sawtooth', 0.3, 0.1), 100); // Low pitch buzz
+                setTimeout(() => playTone(100, 'sawtooth', 0.3, 0.1), 100); 
             },
             gameOver: () => {
                 const now = audioCtx.currentTime;
-                [523.25, 392.00, 329.63, 261.63].forEach((freq, i) => { // C5, G4, E4, C4
+                [523.25, 392.00, 329.63, 261.63].forEach((freq, i) => { 
                     setTimeout(() => playTone(freq, 'triangle', 0.3, 0.1), i * 150);
                 });
             },
-            ready: () => { // เสียงเตรียมพร้อม (ตึ๊ด...)
+            ready: () => { 
                 playTone(400, 'sine', 0.2, 0.1);
             },
-            go: () => { // เสียงเริ่ม (ตื๊ด!)
+            go: () => { 
                 playTone(600, 'sine', 0.1, 0.1);
                 setTimeout(() => playTone(880, 'square', 0.4, 0.1), 50);
             }
@@ -181,7 +185,6 @@
                 return { a, b, op, answer, id: Date.now() };
             }
 
-            // God Multiplication Modes
             if (mode === 'god_2x1') {
                 const a = Math.floor(Math.random() * 90) + 10;
                 const b = Math.floor(Math.random() * 8) + 2;
@@ -198,7 +201,6 @@
                 return { a, b, op: '*', answer: a * b, id: Date.now() };
             }
 
-            // God Division Modes (หารลงตัว)
             if (mode === 'god_div_3x1') {
                 const b = Math.floor(Math.random() * 8) + 2;
                 const minAns = Math.ceil(100 / b);
@@ -224,7 +226,6 @@
                 return { a, b, op: '/', answer: ans, id: Date.now() };
             }
 
-            // Normal Mode
             const ops = ['+', '-', '*'];
             const op = ops[Math.floor(Math.random() * ops.length)];
             let a, b;
@@ -264,13 +265,25 @@
 
         // --- Components ---
 
-        // Toggle Sound Button Component
+        // Toggle Sound Button
         const SoundToggle = ({ muted, onToggle }) => (
             <button 
                 onClick={onToggle}
-                className="absolute top-4 right-4 z-50 bg-white p-3 rounded-full shadow-md text-gray-600 hover:text-blue-500 transition hover:scale-110"
+                className="absolute top-4 left-4 z-50 bg-white w-10 h-10 rounded-full shadow-md text-gray-600 hover:text-blue-500 transition hover:scale-110 active:scale-95 flex items-center justify-center"
+                title="เปิด/ปิด เสียง"
             >
                 {muted ? <i className="fa-solid fa-volume-xmark"></i> : <i className="fa-solid fa-volume-high"></i>}
+            </button>
+        );
+
+        // Toggle Input Method Button (New)
+        const InputToggle = ({ inputMode, onToggle }) => (
+            <button 
+                onClick={onToggle}
+                className="absolute top-16 left-4 z-50 bg-white w-10 h-10 rounded-full shadow-md text-gray-600 hover:text-blue-500 transition hover:scale-110 active:scale-95 flex items-center justify-center mt-2"
+                title={inputMode === 'numpad' ? "โหมดสัมผัส (ปิดคีย์บอร์ด)" : "โหมดพิมพ์ (เปิดคีย์บอร์ด)"}
+            >
+                {inputMode === 'numpad' ? <i className="fa-solid fa-hand-pointer"></i> : <i className="fa-regular fa-keyboard"></i>}
             </button>
         );
 
@@ -318,23 +331,13 @@
             );
         };
 
-        // --- Countdown Component (New) ---
         const Countdown = ({ onComplete, playSound }) => {
-            const [step, setStep] = useState('ready'); // ready, go
+            const [step, setStep] = useState('ready'); 
 
             useEffect(() => {
-                // Step 1: Ready
                 playSound('ready');
-                
-                const timer1 = setTimeout(() => {
-                    setStep('go');
-                    playSound('go');
-                }, 1500); // แสดง Ready 1.5 วินาที
-
-                const timer2 = setTimeout(() => {
-                    onComplete();
-                }, 2500); // แสดง Go 1 วินาที แล้วเริ่มเกม
-
+                const timer1 = setTimeout(() => { setStep('go'); playSound('go'); }, 1500); 
+                const timer2 = setTimeout(() => { onComplete(); }, 2500); 
                 return () => { clearTimeout(timer1); clearTimeout(timer2); };
             }, []);
 
@@ -353,7 +356,6 @@
             const [viewMode, setViewMode] = useState('normal'); 
 
             useEffect(() => {
-                // Determine storage key
                 let storageKey = 'speedmath_scores';
                 if (viewMode === 'baby') storageKey = 'speedmath_scores_baby';
                 else if (viewMode === 'god_2x1') storageKey = 'speedmath_scores_god_2x1';
@@ -397,7 +399,6 @@
                             <i className="fa-solid fa-trophy mr-2"></i>อันดับยอดเยี่ยม
                         </h2>
 
-                        {/* Mode Toggles - Scrollable for more modes */}
                         <div className="flex gap-2 mb-4 mt-2 overflow-x-auto pb-2 px-2 custom-scroll">
                             {['normal', 'baby'].map(m => (
                                 <button key={m} onClick={() => handleModeChange(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${isCurrentModeActive(m) ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>
@@ -489,7 +490,6 @@
                         <h1 className="text-4xl font-extrabold text-gray-800 mb-2">Speed Math</h1>
                         <p className="text-gray-500 mb-8">ประลองสมอง ประลองความเร็ว</p>
 
-                        {/* Menu State Logic */}
                         {!subMenu ? (
                             <>
                                 <button 
@@ -528,107 +528,56 @@
                                 </button>
                             </>
                         ) : subMenu === 'god_mult' ? (
-                            // God Multiplication Sub-menu
                             <div className="space-y-3 mb-4 animate-[pop_0.3s_ease-out]">
                                 <h3 className="text-yellow-600 font-bold text-lg mb-2">เลือกความเทพ (คูณ)</h3>
-                                <button 
-                                    onClick={() => handleStart('god_2x1')}
-                                    className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 px-6 rounded-xl shadow-md"
-                                >
-                                    2 หลัก × 1 หลัก
-                                </button>
-                                <button 
-                                    onClick={() => handleStart('god_3x1')}
-                                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-md"
-                                >
-                                    3 หลัก × 1 หลัก
-                                </button>
-                                <button 
-                                    onClick={() => handleStart('god_2x2')}
-                                    className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-red-800"
-                                >
-                                    2 หลัก × 2 หลัก 🔥
-                                </button>
-                                <button 
-                                    onClick={() => handleSubMenu(null)}
-                                    className="text-gray-400 hover:text-gray-600 text-sm mt-2"
-                                >
-                                    <i className="fa-solid fa-arrow-left"></i> กลับ
-                                </button>
+                                <button onClick={() => handleStart('god_2x1')} className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-3 px-6 rounded-xl shadow-md">2 หลัก × 1 หลัก</button>
+                                <button onClick={() => handleStart('god_3x1')} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-md">3 หลัก × 1 หลัก</button>
+                                <button onClick={() => handleStart('god_2x2')} className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-red-800">2 หลัก × 2 หลัก 🔥</button>
+                                <button onClick={() => handleSubMenu(null)} className="text-gray-400 hover:text-gray-600 text-sm mt-2"><i className="fa-solid fa-arrow-left"></i> กลับ</button>
                             </div>
                         ) : (
-                            // God Division Sub-menu
                             <div className="space-y-3 mb-4 animate-[pop_0.3s_ease-out]">
                                 <h3 className="text-teal-600 font-bold text-lg mb-2">เลือกความเทพ (หาร)</h3>
-                                <button 
-                                    onClick={() => handleStart('god_div_3x1')}
-                                    className="w-full bg-teal-400 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl shadow-md"
-                                >
-                                    3 หลัก ÷ 1 หลัก
-                                </button>
-                                <button 
-                                    onClick={() => handleStart('god_div_4x1')}
-                                    className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-xl shadow-md"
-                                >
-                                    4 หลัก ÷ 1 หลัก
-                                </button>
-                                <button 
-                                    onClick={() => handleStart('god_div_4x2')}
-                                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-cyan-800"
-                                >
-                                    4 หลัก ÷ 2 หลัก 🔥
-                                </button>
-                                <button 
-                                    onClick={() => handleSubMenu(null)}
-                                    className="text-gray-400 hover:text-gray-600 text-sm mt-2"
-                                >
-                                    <i className="fa-solid fa-arrow-left"></i> กลับ
-                                </button>
+                                <button onClick={() => handleStart('god_div_3x1')} className="w-full bg-teal-400 hover:bg-teal-500 text-white font-bold py-3 px-6 rounded-xl shadow-md">3 หลัก ÷ 1 หลัก</button>
+                                <button onClick={() => handleStart('god_div_4x1')} className="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-6 rounded-xl shadow-md">4 หลัก ÷ 1 หลัก</button>
+                                <button onClick={() => handleStart('god_div_4x2')} className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-xl shadow-md border-b-4 border-cyan-800">4 หลัก ÷ 2 หลัก 🔥</button>
+                                <button onClick={() => handleSubMenu(null)} className="text-gray-400 hover:text-gray-600 text-sm mt-2"><i className="fa-solid fa-arrow-left"></i> กลับ</button>
                             </div>
                         )}
 
-                        {/* Gemini Feature 1 */}
                         <div className="mt-4 mb-4">
-                             <button 
-                                onClick={getMathFact}
-                                disabled={loadingAi}
-                                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transform transition hover:scale-105 flex items-center justify-center gap-2"
-                            >
+                             <button onClick={getMathFact} disabled={loadingAi} className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transform transition hover:scale-105 flex items-center justify-center gap-2">
                                 {loadingAi ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-sparkles"></i>}
                                 <span>ขอเกร็ดความรู้ AI</span>
                             </button>
                             {aiFact && (
                                 <div className="mt-3 bg-indigo-50 p-3 rounded-lg text-sm text-indigo-800 border border-indigo-200 animate-pulse-slow">
-                                    <strong className="block mb-1">✨ Gemini บอกว่า:</strong>
-                                    {aiFact}
+                                    <strong className="block mb-1">✨ Gemini บอกว่า:</strong>{aiFact}
                                 </div>
                             )}
                         </div>
 
-                        <button 
-                            onClick={() => { playSound('click'); onLogout(); }}
-                            className="text-gray-400 hover:text-red-500 text-sm underline"
-                        >
-                            เปลี่ยนชื่อผู้เล่น
-                        </button>
-
-                        <div className="w-full text-right mt-4">
-                            <span className="text-xs text-gray-400 blink-slow font-light">สร้างโดย KF</span>
-                        </div>
+                        <button onClick={() => { playSound('click'); onLogout(); }} className="text-gray-400 hover:text-red-500 text-sm underline">เปลี่ยนชื่อผู้เล่น</button>
+                        <div className="w-full text-right mt-4"><span className="text-xs text-gray-400 blink-slow font-light">สร้างโดย KF</span></div>
                     </div>
                 </div>
             );
         };
 
-        const GameScreen = ({ question, score, onAnswer, onQuit, timeUp, mode, playSound }) => {
+        const GameScreen = ({ question, score, onAnswer, onQuit, timeUp, mode, playSound, inputMode }) => {
             const [input, setInput] = useState('');
             const [feedback, setFeedback] = useState(null); 
-            
             const inputRef = useRef(null);
-            useEffect(() => { inputRef.current?.focus(); }, [question]);
+
+            // Effect to handle keyboard typing when in 'keyboard' mode
+            useEffect(() => {
+                if (inputMode === 'keyboard' && inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, [question, inputMode]);
 
             const handleSubmit = (e) => {
-                e.preventDefault();
+                if (e) e.preventDefault();
                 const val = parseInt(input);
                 if (isNaN(val)) return;
 
@@ -649,7 +598,11 @@
                 playSound('click');
                 if (num === 'C') setInput('');
                 else setInput(prev => prev + num);
-                inputRef.current?.focus();
+                
+                // Keep focus on input if in keyboard mode
+                if (inputMode === 'keyboard' && inputRef.current) {
+                    inputRef.current.focus();
+                }
             };
 
             const isGodMult = mode.startsWith('god') && !mode.includes('div');
@@ -710,19 +663,27 @@
                             <span className={theme.score}>?</span>
                         </div>
 
-                        <form onSubmit={handleSubmit}>
-                            <input
-                                ref={inputRef}
-                                type="number"
-                                pattern="[0-9]*"
-                                inputMode="numeric"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent focus:bg-white outline-none transition shadow-inner ${theme.ring}`}
-                                placeholder="คำตอบ"
-                            />
-                            <button type="submit" className="hidden">Submit</button>
-                        </form>
+                        {/* Input Area: Div for Numpad Mode, Input for Keyboard Mode */}
+                        {inputMode === 'numpad' ? (
+                            <div className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent transition shadow-inner flex items-center justify-center h-20 ${theme.ring}`}>
+                                {input}<span className="animate-pulse text-gray-400 font-light text-3xl ml-1">|</span>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="w-full">
+                                <input
+                                    ref={inputRef}
+                                    type="number"
+                                    pattern="[0-9]*"
+                                    inputMode="numeric"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent focus:bg-white outline-none transition shadow-inner h-20 ${theme.ring}`}
+                                    placeholder="?"
+                                    autoFocus
+                                />
+                                <button type="submit" className="hidden">Submit</button>
+                            </form>
+                        )}
                     </div>
 
                     <div className="w-full max-w-lg grid grid-cols-3 gap-2 mt-auto">
@@ -736,7 +697,7 @@
                             </button>
                         ))}
                          <button
-                            onClick={handleSubmit}
+                            onClick={() => handleSubmit()}
                             className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition text-white ${theme.btn}`}
                         >
                             <i className="fa-solid fa-paper-plane"></i>
@@ -864,6 +825,7 @@
             const [isNewHighScore, setIsNewHighScore] = useState(false);
             const [difficulty, setDifficulty] = useState('normal'); 
             const [isMuted, setIsMuted] = useState(false);
+            const [inputMode, setInputMode] = useState('numpad'); // 'numpad' or 'keyboard'
 
             useEffect(() => {
                 const savedUser = sessionStorage.getItem('speedmath_user');
@@ -959,6 +921,7 @@
             return (
                 <div className="min-h-screen relative">
                     <SoundToggle muted={isMuted} onToggle={() => setIsMuted(!isMuted)} />
+                    <InputToggle inputMode={inputMode} onToggle={() => setInputMode(prev => prev === 'numpad' ? 'keyboard' : 'numpad')} />
                     
                     {gameState === 'login' && (
                         <LoginScreen onLogin={handleLogin} playSound={playSound} />
@@ -995,6 +958,7 @@
                             timeUp={handleGameOver}
                             mode={difficulty}
                             playSound={playSound}
+                            inputMode={inputMode}
                         />
                     )}
 
