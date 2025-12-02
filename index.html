@@ -289,14 +289,14 @@
         };
 
         // --- Styles Helpers ---
+        // Helper to adjust panel classes based on layout mode
         const getPanelClass = (screenMode) => {
             const base = "glass-panel text-center transition-all duration-300 ";
             switch (screenMode) {
-                case 1: // Vertical
-                    return base + "h-[98vh] w-full max-w-md p-8 rounded-2xl flex flex-col justify-center my-auto";
-                case 2: // Horizontal
-                    return base + "w-[98vw] max-w-4xl p-8 rounded-3xl";
-                case 3: // Full
+                case 1: // Compact / Keyboard Friendly
+                    // Minimal padding, full width, simplified
+                    return base + "w-full max-w-lg p-4 rounded-xl border-b-2 border-gray-200 shadow-sm";
+                case 2: // Full
                     return base + "w-full h-full max-w-none rounded-none p-8 flex flex-col justify-center fixed inset-0 z-40 overflow-y-auto";
                 default: // Normal
                     return base + "w-full max-w-md p-8 rounded-3xl";
@@ -306,9 +306,11 @@
         // --- Navigation Buttons (Left Bar) ---
         const NavigationBar = ({ muted, onToggleMute, inputMode, onToggleInput, onBack, onHome, screenMode, onToggleScreen }) => {
             let screenIcon = "fa-expand";
-            if (screenMode === 1) screenIcon = "fa-arrows-alt-v";
-            else if (screenMode === 2) screenIcon = "fa-arrows-alt-h";
-            else if (screenMode === 3) screenIcon = "fa-compress";
+            let screenTitle = "ปกติ";
+            
+            // Cycle: Normal (0) -> Compact/Top (1) -> Full (2)
+            if (screenMode === 1) { screenIcon = "fa-arrow-up"; screenTitle = "โหมดแก้คีย์บอร์ดบัง (Compact)"; }
+            else if (screenMode === 2) { screenIcon = "fa-arrows-alt-v"; screenTitle = "เต็มหน้าจอ"; }
 
             return (
                 <div className="absolute top-4 left-4 z-[100] flex flex-col gap-2">
@@ -324,7 +326,7 @@
                     <button onClick={onHome} className="bg-white w-10 h-10 rounded-full shadow-md text-gray-600 hover:text-green-500 transition hover:scale-110 active:scale-95 flex items-center justify-center" title="หน้าหลัก">
                         <i className="fa-solid fa-house"></i>
                     </button>
-                    <button onClick={onToggleScreen} className="bg-white w-10 h-10 rounded-full shadow-md text-gray-600 hover:text-purple-500 transition hover:scale-110 active:scale-95 flex items-center justify-center" title="ปรับขนาดหน้าจอ">
+                    <button onClick={onToggleScreen} className={`w-10 h-10 rounded-full shadow-md transition hover:scale-110 active:scale-95 flex items-center justify-center ${screenMode === 1 ? 'bg-purple-100 text-purple-600 border-2 border-purple-400' : 'bg-white text-gray-600 hover:text-purple-500'}`} title={screenTitle}>
                         <i className={`fa-solid ${screenIcon}`}></i>
                     </button>
                 </div>
@@ -353,6 +355,7 @@
                             <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg transform transition hover:scale-105">เข้าเล่นเกม</button>
                         </form>
                     </div>
+                    <div className="absolute bottom-6 w-full text-center text-sm text-gray-500 blink-slow font-medium">สร้างโดย KF</div>
                 </div>
             );
         };
@@ -386,9 +389,14 @@
                 <button onClick={() => { playSound('click'); onClick(); }} className={`px-3 py-1 rounded-full text-sm font-bold border-2 transition whitespace-nowrap ${selected ? 'bg-purple-500 text-white border-purple-500' : 'bg-white text-gray-500 border-gray-200'}`}>{label}</button>
             );
 
+            // Adjust layout class based on screenMode if needed, but standard logic applies
+            const containerClass = screenMode === 2 
+                ? "w-full h-full max-w-none rounded-none p-8 flex flex-col justify-center fixed inset-0 z-40 overflow-y-auto glass-panel"
+                : "glass-panel p-6 rounded-3xl w-full max-w-md relative max-h-[90vh] overflow-y-auto custom-scroll";
+
             return (
                 <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop">
-                    <div className={`${getPanelClass(screenMode)} relative max-h-[90vh] overflow-y-auto custom-scroll`}>
+                    <div className={containerClass}>
                         <h2 className="text-2xl font-bold text-center text-purple-600 mb-6 mt-2">ตั้งค่าเทพการบวก-ลบ ⚡</h2>
                         <div className="space-y-4">
                             <div><label className="block text-gray-700 text-sm font-bold mb-2">จำนวนหลัก</label><div className="flex flex-wrap gap-2">{[1, 2, 3].map(d => <SettingButton key={d} selected={digits === d} onClick={() => setDigits(d)} label={`${d} หลัก`} />)}</div></div>
@@ -458,9 +466,15 @@
                 if (inputMode === 'keyboard' && inputRef.current) inputRef.current.focus();
             };
 
-            if (phase === 'flashing') return <div className="flex flex-col items-center justify-center min-h-screen bg-purple-50 p-4"><div className="absolute top-4 right-4 text-purple-400 font-bold bg-white px-3 py-1 rounded-full shadow">ข้อที่ {currentRound} / {settings.numQuestions}</div><div className="text-gray-400 font-bold mb-8 text-xl">ตัวที่ {currentIndex + 1} / {settings.count}</div><div className="text-9xl font-black text-purple-600 drop-shadow-lg h-40 flex items-center justify-center">{showNumber && sequence[currentIndex] !== undefined ? <span className="anim-pop">{sequence[currentIndex]}</span> : <span></span>}</div></div>;
+            // Layout Adjustments for Flash Game
+            const isCompact = screenMode === 1;
+            const containerStyle = isCompact ? "justify-start pt-4" : "justify-center";
+            const spacingStyle = isCompact ? "mb-2" : "mb-8";
+            const numberSize = isCompact ? "text-7xl h-32" : "text-9xl h-40";
+
+            if (phase === 'flashing') return <div className={`flex flex-col items-center min-h-screen bg-purple-50 p-4 ${containerStyle}`}><div className="absolute top-4 right-4 text-purple-400 font-bold bg-white px-3 py-1 rounded-full shadow">ข้อที่ {currentRound} / {settings.numQuestions}</div><div className={`text-gray-400 font-bold ${spacingStyle} text-xl`}>ตัวที่ {currentIndex + 1} / {settings.count}</div><div className={`${numberSize} font-black text-purple-600 drop-shadow-lg flex items-center justify-center`}>{showNumber && sequence[currentIndex] !== undefined ? <span className="anim-pop">{sequence[currentIndex]}</span> : <span></span>}</div></div>;
             
-            if (phase === 'input') return <div className="flex flex-col items-center min-h-screen bg-purple-50 pt-8 pb-4 px-4"><div className="absolute top-4 right-4 text-purple-400 font-bold bg-white px-3 py-1 rounded-full shadow">ข้อที่ {currentRound} / {settings.numQuestions}</div><div className="w-full max-w-lg mb-8 text-center mt-8"><h2 className="text-4xl font-bold text-purple-600 mb-4 animate-bounce">ตอบเท่าไหร่?</h2></div><div className={getPanelClass(screenMode) + " mb-6"}>{inputMode === 'numpad' ? <div className="w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-purple-300 flex items-center justify-center h-20">{input}<span className="animate-pulse text-gray-400 font-light text-3xl ml-1">|</span></div> : <form onSubmit={handleSubmit} className="w-full"><input ref={inputRef} type="number" pattern="[0-9]*" inputMode="numeric" value={input} onChange={(e) => setInput(e.target.value)} className="w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-purple-300 focus:bg-white outline-none h-20" placeholder="?" autoFocus /><button type="submit" className="hidden">Submit</button></form>}</div><div className="w-full max-w-lg grid grid-cols-3 gap-2 mt-auto">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((num) => <button key={num} onClick={() => handleNumpad(num)} className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition ${num === 'C' ? 'bg-red-100 text-red-500' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>{num}</button>)}<button onClick={() => handleSubmit()} className="p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition text-white bg-purple-500"><i className="fa-solid fa-paper-plane"></i></button></div></div>;
+            if (phase === 'input') return <div className={`flex flex-col items-center min-h-screen bg-purple-50 px-4 ${isCompact ? 'pt-4 justify-start' : 'pt-8'}`}><div className="absolute top-4 right-4 text-purple-400 font-bold bg-white px-3 py-1 rounded-full shadow">ข้อที่ {currentRound} / {settings.numQuestions}</div><div className={`w-full max-w-lg text-center ${isCompact ? 'mt-4 mb-2' : 'mt-8 mb-8'}`}><h2 className={`font-bold text-purple-600 animate-bounce ${isCompact ? 'text-2xl mb-1' : 'text-4xl mb-4'}`}>ตอบเท่าไหร่?</h2></div><div className={`${getPanelClass(screenMode)} mb-6 shadow-xl`}>{inputMode === 'numpad' ? <div className={`w-full bg-gray-100 text-center font-bold p-4 rounded-xl border-2 border-purple-300 flex items-center justify-center ${isCompact ? 'text-3xl h-16' : 'text-4xl h-20'}`}>{input}<span className="animate-pulse text-gray-400 font-light text-3xl ml-1">|</span></div> : <form onSubmit={handleSubmit} className="w-full"><input ref={inputRef} type="number" pattern="[0-9]*" inputMode="numeric" value={input} onChange={(e) => setInput(e.target.value)} className={`w-full bg-gray-100 text-center font-bold p-4 rounded-xl border-2 border-purple-300 focus:bg-white outline-none ${isCompact ? 'text-3xl h-16' : 'text-4xl h-20'}`} placeholder="?" autoFocus /><button type="submit" className="hidden">Submit</button></form>}</div><div className="w-full max-w-lg grid grid-cols-3 gap-2 mt-auto">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((num) => <button key={num} onClick={() => handleNumpad(num)} className={`rounded-xl font-bold shadow-sm active:scale-95 transition ${num === 'C' ? 'bg-red-100 text-red-500' : 'bg-white text-gray-700 hover:bg-gray-50'} ${isCompact ? 'p-3 text-xl' : 'p-4 text-2xl'}`}>{num}</button>)}<button onClick={() => handleSubmit()} className={`rounded-xl font-bold shadow-sm active:scale-95 transition text-white bg-purple-500 ${isCompact ? 'p-3 text-xl' : 'p-4 text-2xl'}`}><i className="fa-solid fa-paper-plane"></i></button></div></div>;
             
             if (phase === 'result') return <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop"><div className={`${getPanelClass(screenMode)} border-t-4 border-purple-500`}><h2 className="text-3xl font-bold text-gray-800 mb-4">ผลลัพธ์ (ข้อ {currentRound})</h2><div className="text-xl mb-6 font-bold text-purple-600">{resultMsg}</div><div className="bg-gray-50 p-4 rounded-xl mb-6 text-sm text-gray-500 text-left max-h-40 overflow-y-auto custom-scroll"><div className="font-bold mb-2 text-center">โจทย์ที่แสดง:</div><div className="flex flex-wrap gap-2 justify-center">{sequence.map((n, i) => <span key={i} className="bg-white px-2 py-1 rounded border shadow-sm">{n > 0 && i > 0 ? `+${n}` : n}</span>)}</div><div className="mt-2 text-center font-bold text-lg">= {answer}</div></div><button onClick={handleNextRound} className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-2xl shadow-lg animate-pulse">{currentRound < settings.numQuestions ? 'ข้อต่อไป ▶' : 'ดูสรุปผล 📊'}</button></div></div>;
             
@@ -530,8 +544,103 @@
             let modeLabel = ''; if (isBabyMode) modeLabel = 'BABY MODE'; if (mode === 'god_2x1') modeLabel = 'GOD MUL 2x1'; if (mode === 'god_3x1') modeLabel = 'GOD MUL 3x1'; if (mode === 'god_2x2') modeLabel = 'GOD MUL 2x2'; if (mode === 'god_div_3x1') modeLabel = 'GOD DIV 3/1'; if (mode === 'god_div_4x1') modeLabel = 'GOD DIV 4/1'; if (mode === 'god_div_4x2') modeLabel = 'GOD DIV 4/2';
             const getThemeColors = () => { if (isBabyMode) return { bg: 'bg-pink-50', text: 'text-pink-500', border: 'border-pink-400', ring: 'focus:border-pink-400', score: 'text-pink-500', btn: 'bg-pink-400' }; if (isGodMult) return { bg: 'bg-orange-50', text: 'text-orange-500', border: 'border-orange-500', ring: 'focus:border-orange-500', score: 'text-orange-600', btn: 'bg-orange-500' }; if (isGodDiv) return { bg: 'bg-teal-50', text: 'text-teal-500', border: 'border-teal-500', ring: 'focus:border-teal-500', score: 'text-teal-600', btn: 'bg-teal-500' }; return { bg: 'bg-blue-50', text: 'text-blue-500', border: 'border-blue-500', ring: 'focus:border-blue-500', score: 'text-blue-600', btn: 'bg-blue-500' }; };
             const theme = getThemeColors();
+
+            // Compact Mode Adjustments (Keyboard Friendly)
+            const isCompact = screenMode === 1;
+            const containerStyle = isCompact ? `pt-2 justify-start h-[100dvh]` : `min-h-screen pt-8 justify-between`; // Use dvh for mobile fix
+            const headerStyle = isCompact ? "mb-2 scale-90" : "mb-8";
+            const panelStyle = isCompact ? "mb-2 py-4" : "mb-6 py-8";
+            const fontScale = isCompact ? "scale-90 origin-top" : ""; // Scale down question slightly
+            const numpadStyle = isCompact ? "mt-2" : "mt-auto";
+
             return (
-                <div className={`flex flex-col items-center min-h-screen pt-8 pb-4 px-4 transition-colors duration-500 ${theme.bg} ${feedback === 'correct' ? 'bg-green-100' : feedback === 'wrong' ? 'bg-red-100' : ''}`}><div className="w-full max-w-lg flex justify-between items-center mb-8"><div className="w-10"></div><div className="bg-white px-6 py-2 rounded-full shadow-sm flex items-center gap-2">{modeLabel && <span className={`text-sm font-bold ${theme.text}`}>{modeLabel}</span>}<Timer duration={60} onTimeUp={timeUp} active={true} /></div><div className="w-10"></div></div><div className="w-full max-w-lg flex justify-center mb-8"><div className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 flex flex-col items-center w-32 ${theme.border} ${feedback === 'correct' ? 'scale-110 transition-transform' : ''}`}><span className="text-gray-400 text-xs uppercase font-bold">คะแนน</span><span className={`text-4xl font-bold ${theme.score}`}>{score}</span></div></div><div className={`${getPanelClass(screenMode)} mb-6 shadow-xl relative overflow-hidden transition-transform ${feedback === 'wrong' ? 'shake bg-red-50' : ''}`}>{feedback === 'correct' && <div className="absolute inset-0 flex items-center justify-center bg-green-100 bg-opacity-90 z-10 text-green-600 text-6xl font-bold anim-pop"><i className="fa-solid fa-check"></i></div>}<div className="text-gray-400 text-sm mb-2">โจทย์ข้อที่ {score + 1}</div><div className="text-6xl font-bold text-gray-800 mb-8 flex justify-center gap-4"><span>{question.a}</span><span className={theme.text}>{question.op === '*' ? '×' : question.op === '/' ? '÷' : question.op}</span><span>{question.b}</span><span className="text-gray-300">=</span><span className={theme.score}>?</span></div>{inputMode === 'numpad' ? <div className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent transition shadow-inner flex items-center justify-center h-20 ${theme.ring}`}>{input}<span className="animate-pulse text-gray-400 font-light text-3xl ml-1">|</span></div> : <form onSubmit={handleSubmit} className="w-full"><input ref={inputRef} type="number" pattern="[0-9]*" inputMode="numeric" value={input} onChange={(e) => setInput(e.target.value)} className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent focus:bg-white outline-none transition shadow-inner h-20 ${theme.ring}`} placeholder="?" autoFocus /><button type="submit" className="hidden">Submit</button></form>}</div><div className="w-full max-w-lg grid grid-cols-3 gap-2 mt-auto">{[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((num) => <button key={num} onClick={() => handleNumpad(num)} className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition ${num === 'C' ? 'bg-red-100 text-red-500' : 'bg-white text-gray-700 hover:bg-gray-50'}`}>{num}</button>)}<button onClick={() => handleSubmit()} className={`p-4 rounded-xl font-bold text-2xl shadow-sm active:scale-95 transition text-white ${theme.btn}`}><i className="fa-solid fa-paper-plane"></i></button></div></div>
+                <div className={`flex flex-col items-center px-4 transition-colors duration-500 ${theme.bg} ${feedback === 'correct' ? 'bg-green-100' : feedback === 'wrong' ? 'bg-red-100' : ''} ${containerStyle}`}>
+                    
+                    {/* Header */}
+                    <div className={`w-full max-w-lg flex justify-between items-center ${headerStyle} transition-all`}>
+                        <div className="w-10"></div>
+                        <div className="bg-white px-6 py-2 rounded-full shadow-sm flex items-center gap-2">
+                             {modeLabel && <span className={`text-sm font-bold ${theme.text}`}>{modeLabel}</span>}
+                            <Timer duration={60} onTimeUp={timeUp} active={true} />
+                        </div>
+                        <button onClick={() => { playSound('click'); onQuit(); }} className="w-10 h-10 rounded-full bg-white shadow text-gray-500 hover:text-red-500">
+                            <i className="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+
+                    {/* Score - Hide in compact mode if keyboard is up? No, keep it small */}
+                    {!isCompact && (
+                        <div className="w-full max-w-lg flex justify-center mb-8">
+                            <div className={`bg-white p-4 rounded-2xl shadow-sm border-l-4 flex flex-col items-center w-32 ${theme.border} ${feedback === 'correct' ? 'scale-110 transition-transform' : ''}`}>
+                                <span className="text-gray-400 text-xs uppercase font-bold">คะแนน</span>
+                                <span className={`text-4xl font-bold ${theme.score}`}>{score}</span>
+                            </div>
+                        </div>
+                    )}
+                    {isCompact && (
+                         <div className={`absolute top-16 right-4 bg-white p-2 rounded-xl shadow-sm border-l-4 flex flex-col items-center w-20 ${theme.border} z-40`}>
+                            <span className="text-gray-400 text-[10px] uppercase font-bold">คะแนน</span>
+                            <span className={`text-2xl font-bold ${theme.score}`}>{score}</span>
+                        </div>
+                    )}
+
+                    {/* Question Panel */}
+                    <div className={`${getPanelClass(screenMode)} ${panelStyle} shadow-xl relative overflow-hidden transition-transform ${feedback === 'wrong' ? 'shake bg-red-50' : ''}`}>
+                        {feedback === 'correct' && <div className="absolute inset-0 flex items-center justify-center bg-green-100 bg-opacity-90 z-10 text-green-600 text-6xl font-bold anim-pop"><i className="fa-solid fa-check"></i></div>}
+                        
+                        <div className={`transition-transform ${fontScale}`}>
+                            <div className="text-gray-400 text-sm mb-2">โจทย์ข้อที่ {score + 1}</div>
+                            <div className="text-6xl font-bold text-gray-800 mb-8 flex justify-center gap-4">
+                                <span>{question.a}</span>
+                                <span className={theme.text}>{question.op === '*' ? '×' : question.op === '/' ? '÷' : question.op}</span>
+                                <span>{question.b}</span>
+                                <span className="text-gray-300">=</span>
+                                <span className={theme.score}>?</span>
+                            </div>
+                        </div>
+
+                        {/* Input Area */}
+                        {inputMode === 'numpad' ? (
+                            <div className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent transition shadow-inner flex items-center justify-center ${isCompact ? 'h-16' : 'h-20'} ${theme.ring}`}>
+                                {input}<span className="animate-pulse text-gray-400 font-light text-3xl ml-1">|</span>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSubmit} className="w-full">
+                                <input 
+                                    ref={inputRef} 
+                                    type="number" 
+                                    pattern="[0-9]*" 
+                                    inputMode="numeric" 
+                                    value={input} 
+                                    onChange={(e) => setInput(e.target.value)} 
+                                    className={`w-full bg-gray-100 text-center text-4xl font-bold p-4 rounded-xl border-2 border-transparent focus:bg-white outline-none transition shadow-inner ${isCompact ? 'h-16' : 'h-20'} ${theme.ring}`} 
+                                    placeholder="?" 
+                                    autoFocus 
+                                />
+                                <button type="submit" className="hidden">Submit</button>
+                            </form>
+                        )}
+                    </div>
+
+                    {/* Numpad - Hide if compact AND keyboard mode is active? User might still want numpad in compact. Keep it. */}
+                    <div className={`w-full max-w-lg grid grid-cols-3 gap-2 ${numpadStyle} pb-4`}>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0].map((num) => (
+                            <button 
+                                key={num} 
+                                onClick={() => handleNumpad(num)} 
+                                className={`rounded-xl font-bold shadow-sm active:scale-95 transition ${num === 'C' ? 'bg-red-100 text-red-500' : 'bg-white text-gray-700 hover:bg-gray-50'} ${isCompact ? 'p-3 text-xl' : 'p-4 text-2xl'}`}
+                            >
+                                {num}
+                            </button>
+                        ))}
+                        <button 
+                            onClick={() => handleSubmit()} 
+                            className={`rounded-xl font-bold shadow-sm active:scale-95 transition text-white ${theme.btn} ${isCompact ? 'p-3 text-xl' : 'p-4 text-2xl'}`}
+                        >
+                            <i className="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
             );
         };
 
@@ -559,7 +668,7 @@
             const [isMuted, setIsMuted] = useState(false);
             const [inputMode, setInputMode] = useState('numpad'); 
             const [flashSettings, setFlashSettings] = useState(null);
-            const [screenMode, setScreenMode] = useState(0); // 0: Normal, 1: Vert, 2: Horz, 3: Full
+            const [screenMode, setScreenMode] = useState(0); // 0: Normal, 1: Compact/Keyboard, 2: Full
 
             useEffect(() => {
                 const savedUser = sessionStorage.getItem('speedmath_user');
@@ -599,7 +708,7 @@
                 playSound('click');
                 if (gameState === 'god_flash_settings') setGameState('menu');
                 else if (gameState === 'leaderboard') setGameState('menu');
-                else if (gameState === 'god_flash_playing') setGameState('god_flash_settings'); // Back from flash game -> settings
+                else if (gameState === 'god_flash_playing') setGameState('god_flash_settings'); 
                 else if (gameState === 'playing_single') setGameState('menu');
                 else if (gameState === 'game_over') setGameState('menu');
                 else if (gameState === 'menu') handleLogout();
@@ -619,7 +728,7 @@
                             onBack={handleBack}
                             onHome={handleHome}
                             screenMode={screenMode}
-                            onToggleScreen={() => setScreenMode(prev => (prev + 1) % 4)}
+                            onToggleScreen={() => setScreenMode(prev => (prev + 1) % 3)}
                         />
                     )}
                     
