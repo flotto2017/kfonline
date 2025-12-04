@@ -307,6 +307,17 @@
         const NavigationBar = ({ muted, onToggleMute, inputMode, onToggleInput, onBack, onHome, screenMode, onToggleScreen }) => {
             const [isExpanded, setIsExpanded] = useState(false);
             
+            // Auto-hide menu after 5 seconds
+            useEffect(() => {
+                let timer;
+                if (isExpanded) {
+                    timer = setTimeout(() => {
+                        setIsExpanded(false);
+                    }, 5000);
+                }
+                return () => clearTimeout(timer);
+            }, [isExpanded]);
+            
             let screenIcon = "fa-expand";
             let screenTitle = "ปกติ";
             
@@ -522,7 +533,7 @@
                  if (m === 'normal') return 'ปกติ'; if (m === 'baby') return 'Baby'; if (m === 'god_2x1') return 'เทพคูณ 2x1'; if (m === 'god_3x1') return 'เทพคูณ 3x1'; if (m === 'god_2x2') return 'เทพคูณ 2x2'; if (m === 'god_div_3x1') return 'เทพหาร 3/1'; if (m === 'god_div_4x1') return 'เทพหาร 4/1'; if (m === 'god_div_4x2') return 'เทพหาร 4/2'; return m;
             };
             return (
-                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop"><div className={`${getPanelClass(screenMode)} h-[85vh] flex flex-col`}><h2 className="text-3xl font-bold text-center text-yellow-500 mb-2 mt-2"><i className="fa-solid fa-trophy mr-2"></i>อันดับยอดเยี่ยม</h2><div className="flex gap-2 mb-4 mt-2 overflow-x-auto pb-2 px-2 custom-scroll">{['normal', 'baby', 'god_2x1', 'god_3x1', 'god_2x2', 'god_div_3x1', 'god_div_4x1', 'god_div_4x2'].map(m => <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${viewMode === m ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>)}</div><div className="flex-1 overflow-y-auto custom-scroll mt-2 pr-2">{scores.length === 0 ? <div className="text-center text-gray-400 mt-10">ยังไม่มีคะแนนในโหมด {getModeLabel(viewMode)}</div> : <table className="w-full text-left border-collapse"><thead><tr className="text-gray-400 text-sm border-b border-gray-200"><th className="py-2 px-2 font-light">#</th><th className="py-2 px-2 font-light">ผู้เล่น</th><th className="py-2 px-2 font-light text-right">คะแนน</th></tr></thead><tbody>{scores.map((s, index) => <tr key={index} className={`border-b border-gray-100 last:border-0 ${currentUser && s.username === currentUser.displayName ? 'bg-yellow-50' : ''}`}><td className="py-3 px-2 font-bold text-gray-500">{index + 1}</td><td className="py-3 px-2 font-semibold">{s.username}</td><td className="py-3 px-2 text-right font-bold text-blue-500">{s.score}</td></tr>)}</tbody></table>}</div></div></div>
+                <div className="flex flex-col items-center justify-center min-h-screen p-4 anim-pop"><div className={`${getPanelClass(screenMode)} h-[85vh] flex flex-col`}><h2 className="text-3xl font-bold text-center text-yellow-500 mb-2 mt-2"><i className="fa-solid fa-trophy mr-2"></i>อันดับยอดเยี่ยม</h2><div className="flex gap-2 mb-4 mt-2 overflow-x-auto pb-2 px-2 custom-scroll">{['normal', 'baby', 'god_2x1', 'god_3x1', 'god_2x2', 'god_div_3x1', 'god_div_4x1', 'god_div_4x2'].map(m => <button key={m} onClick={() => setViewMode(m)} className={`px-4 py-2 rounded-full text-sm font-bold whitespace-nowrap transition flex-shrink-0 ${viewMode === m ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}>{getModeLabel(m)}</button>)}</div><div className="flex-1 overflow-y-auto custom-scroll mt-2 pr-2">{scores.length === 0 ? <div className="text-center text-gray-400 mt-10">ยังไม่มีคะแนนในโหมด {getModeLabel(viewMode)}</div> : <table className="w-full text-left border-collapse"><thead><tr className="text-gray-400 text-sm border-b border-gray-200"><th className="py-2 px-2 font-light">#</th><th className="py-2 px-2 font-light">ผู้เล่น</th><th className="py-2 px-2 font-light text-right">คะแนน</th></tr></thead><tbody>{scores.map((s, index) => {const isMe = currentUser && s.username === currentUser.displayName; return (<tr key={index} className={`border-b border-gray-100 last:border-0 ${isMe ? 'bg-yellow-50' : ''}`}><td className="py-3 px-2 font-bold text-gray-500">{index + 1}</td><td className={`py-3 px-2 ${isMe ? 'text-blue-600' : 'text-gray-700'}`}><div className="font-semibold">{s.username} {isMe && '(คุณ)'}</div><div className="text-xs text-gray-400 font-light">{s.timestamp ? new Date(s.timestamp).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}</div></td><td className="py-3 px-2 text-right font-bold text-blue-500">{s.score}</td></tr>);})}</tbody></table>}</div></div></div>
             );
         };
 
